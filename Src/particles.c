@@ -103,29 +103,25 @@ void *electron( void *loc ) {
 	
 	//Math can only be done two numbers at a time.
 	int types[2];
+	types[0] = ELECTRON;
 	
-	long double time = 0.100000000000000;
+	long double time = get_system_time();
 	long double initialTime = time;
 	
 	// How do forces apply to each other?
 	while ( systemFinished == 0 ) {
 	
-		types[0] = ELECTRON;
 		types[1] = ELECTRON;
 		
 		for ( x = 0;x < numParticles[0].amountElectron;x++ ) {
 		
 			if ( x == *index ) {
-			
+				
 				continue;
 			
 			} else {
 				
-				
 				calculate_force( types , *index, x , &current );
-				
-				printf("\n%.40Lf Newtons", current.force);
-				
 				calculate_acceleration( electronAttributes.mass , &current );
 				calculate_velocity( time - initialTime , &current );					
 				calculate_displacement( types , *index , x , time - initialTime , &current );
@@ -140,11 +136,11 @@ void *electron( void *loc ) {
 			
 			
 			calculate_force( types, *index, x, &current );
-			
-			printf("\n%.40Lf Newtons", current.force);
-			
+			printf("\nE->%.40Lf Newtons", current.force);
 			calculate_acceleration( electronAttributes.mass , &current );
+			printf("\nE->%.40Lf m/s^2 " , current.acceleration);
 			calculate_velocity( time - initialTime , &current );
+			printf("\nE->%.60Lf m/s \n" , current.velocity);
 		
 		}
 		
@@ -159,7 +155,7 @@ void *electron( void *loc ) {
 		printf("\n%d z = %f", *index, electronLocations[*index].z);*/
 		
 		initialTime = time;
-		time += 0.100000000000000;
+		time += get_system_time();
 		nanosleep( hold, NULL );
 	
 	}
@@ -219,24 +215,31 @@ void *proton( void *loc ) {
 	}
 	
 	protonLocations[*index].done = 1;
-	
 	check_system();
 	
 	int types[2];
-	types[0] = ELECTRON;
 	types[1] = PROTON;
 	
+	
+	long double time = get_system_time(); 
+	long double initialTime = time;
+	
 	while ( systemFinished == 0 ) {
+		
+		types[0] = ELECTRON;
 		
 		for ( x = 0;x < numParticles[0].amountElectron;x++ ) {
 			
 			calculate_force( types , *index , x , &current );
+			printf("\nP->%.40Lf Newtons", current.force);
 			calculate_acceleration( protonAttributes.mass , &current );
-			calculate_velocity( .1 , &current );
+			printf("\nP->%.40Lf m/s^2 " , current.acceleration);
+			calculate_velocity( time - initialTime , &current );
+			printf("\nP->%.60Lf m/s \n" , current.velocity);
 			
 		
 		}
-		types[1] = PROTON;
+		types[0] = PROTON;
 		
 		for ( x = 0;x < numParticles[0].amountProton;x++ ) {
 			
@@ -248,13 +251,14 @@ void *proton( void *loc ) {
 			
 				calculate_force( types , *index , x , &current );
 				calculate_acceleration( protonAttributes.mass , &current );
-				calculate_velocity( .1 , &current );
+				calculate_velocity( time - initialTime , &current );
 				
 			}
 			
-		
 		}
-		types[1] = ELECTRON;
+		
+		initialTime = time;
+		time += get_system_time();
 		
 		nanosleep( hold , NULL );
 	
@@ -274,10 +278,10 @@ void check_system() {
 	
 	int x;
 	
-	//checks to see if the system is ready.
+	//checks to see if the system is ready. If done == 0, particle is not ready.
 	for ( x = 0; x < numParticles[0].amountElectron;x++ ) {
 			
-		if ( electronLocations[x].done == 1 ) {
+		if ( electronLocations[x].done == 0 ) {
 				
 			x--;
 			
@@ -286,7 +290,7 @@ void check_system() {
 	}
 	for ( x = 0;x < numParticles[0].amountProton; x++ ) {
 		
-		if ( protonLocations[x].done == 1 ) {
+		if ( protonLocations[x].done == 0 ) {
 		
 			x--;
 			
@@ -314,10 +318,8 @@ void calculate_force( int *types , int index1 , int index2 ,  struct movement *t
 		
 		distance = sqrtl( ( x * x ) + ( y * y ) + ( z * z ) );
 		
-		printf("\n%.40Lf metres", distance);
-		
-		this->force = force_kqqR2( electronAttributes.charge , protonAttributes.charge ,
-									distance * scale);
+		this->force += force_kqqR2( electronAttributes.charge , electronAttributes.charge ,
+									distance * scale) - this->force;
 	
 	} else if ( types[0] == ELECTRON && types[1] == PROTON ) {
 		
@@ -327,8 +329,8 @@ void calculate_force( int *types , int index1 , int index2 ,  struct movement *t
 		
 		distance = sqrtl( ( x * x ) + ( y * y ) + ( z * z ) );
 		
-		this->force = force_kqqR2( electronAttributes.charge , protonAttributes.charge ,
-									distance * scale);
+		this->force += force_kqqR2( electronAttributes.charge , protonAttributes.charge ,
+									distance * scale) - this->force;
 	
 	} else if ( types[0] == PROTON && types[1] == PROTON ) {
 		
@@ -338,8 +340,8 @@ void calculate_force( int *types , int index1 , int index2 ,  struct movement *t
 		
 		distance = sqrtl( ( x * x ) + ( y * y ) + ( z * z ) );
 		
-		this->force = force_kqqR2( protonAttributes.charge , protonAttributes.charge ,
-									distance * scale);
+		this->force += force_kqqR2( protonAttributes.charge , protonAttributes.charge ,
+									distance * scale) - this->force;
 	
 	}
 	
@@ -348,13 +350,12 @@ void calculate_force( int *types , int index1 , int index2 ,  struct movement *t
 
 void calculate_acceleration( long double mass , struct movement *this ) {
 	
-	this->acceleration += acceleration_forceMass( this->force , mass );
-
+	this->acceleration += acceleration_forceMass( this->force , mass ) - this->acceleration;
 
 }
 void calculate_velocity( long double time , struct movement *this ) {
 	
-	this->velocity += velocity_accelerationTime( this->acceleration, time );
+	this->velocity += velocity_accelerationTime( this->acceleration, time ) - this->velocity;
 	
 }
 
@@ -369,12 +370,12 @@ void calculate_displacement( int *types , int index1 , int index2 , long double 
 		}
 		if ( electronLocations[index1].y > electronLocations[index2].x ) {
 			
-			this->displacementY += metres_velocityTime( this->velocityX, time );
+			this->displacementY += metres_velocityTime( this->velocityY, time );
 		
 		}
 		if (electronLocations[index1].z > electronLocations[index2].z ) {
 			
-			this->displacementZ += metres_velocityTime( this->velocityX, time );
+			this->displacementZ += metres_velocityTime( this->velocityZ, time );
 		
 		}
 		
